@@ -8,5 +8,7 @@ router = DefaultRouter()
 router.register(r'emails', EmailViewSet, base_name='email')
 
 urlpatterns = [
-    url(r'users/', views.UserList.as_view())
+    url(r'users/', views.UserList.as_view()),
+    url(r'auth/create-user/', views.UserCreate.as_view()),
+    url(r'auth/login/', views.UserLogin.as_view())
 ]

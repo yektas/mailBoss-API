@@ -1,7 +1,9 @@
-from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import User
 from rest_framework import serializers
+from rest_framework.authtoken.models import Token
+from rest_framework.exceptions import ValidationError
+from rest_framework.fields import CharField
 
 from main.models import Email
 
@@ -29,6 +31,39 @@ class UserSerializer(serializers.ModelSerializer):
         )
         user.save()
         return user
+
+
+class UserLoginSerializer(serializers.ModelSerializer):
+    username = CharField()
+    password = CharField()
+
+    class Meta:
+        model = User
+        fields = [
+            "username",
+            "password"
+        ]
+        extra_kwargs = {
+            "password": {
+                "write_only": True,
+            }
+        }
+
+    def validate(self, data):
+        username = data["username"]
+        password = data["password"]
+        user = User.objects.filter(username=username)
+        if user.exists() and user.count() == 1:
+            user_obj = user.first()
+        else:
+            raise ValidationError("Credentials are wrong")
+
+        if user_obj:
+            if not user_obj.check_password(password):
+                raise ValidationError("Incorrect credentials")
+        token, created = Token.objects.get_or_create(user=user)
+        data["token"] = token.key
+        return data
 
 class EmailSerializer(serializers.ModelSerializer):
     class Meta:
