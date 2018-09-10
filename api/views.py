@@ -14,10 +14,10 @@ from main.models import Email
 
 
 class UserList(GenericAPIView):
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [BasicAuthentication]
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [IsAuthenticated]
+    #permission_classes = [IsAuthenticated]
 
     def get(self, request):
 
@@ -65,9 +65,15 @@ class UserLogin(APIView):
         return Response(status=HTTP_400_BAD_REQUEST)
 
 
+class UserViewSet(viewsets.ModelViewSet):
+    authentication_classes = [BasicAuthentication]
+    # permission_classes = [IsAuthenticated]
+    serializer_class = UserSerializer
+    queryset = User.objects.all()
+
 
 class EmailViewSet(viewsets.ModelViewSet):
     authentication_classes = [BasicAuthentication]
-    permission_classes = [IsAuthenticated]
+    #permission_classes = [IsAuthenticated]
     serializer_class = EmailSerializer
     queryset = Email.objects.all()

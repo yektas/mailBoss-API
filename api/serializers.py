@@ -4,6 +4,7 @@ from rest_framework import serializers
 from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import ValidationError
 from rest_framework.fields import CharField
+from rest_framework.relations import RelatedField
 
 from main.models import Email
 
@@ -61,11 +62,24 @@ class UserLoginSerializer(serializers.ModelSerializer):
         if user_obj:
             if not user_obj.check_password(password):
                 raise ValidationError("Incorrect credentials")
-        token, created = Token.objects.get_or_create(user=user)
+        token, created = Token.objects.get_or_create(user=user_obj)
         data["token"] = token.key
         return data
 
+
 class EmailSerializer(serializers.ModelSerializer):
+    from_user = UserSerializer(read_only=True)
+    to_user = UserSerializer(read_only=True)
+
     class Meta:
         model = Email
-        fields = '__all__'
+        fields = [
+            "id",
+            "from_user",
+            "to_user",
+            "subject",
+            "timestamp",
+            "read",
+            "content"
+        ]
+
