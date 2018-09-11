@@ -13,11 +13,11 @@ from api.serializers import EmailSerializer, UserSerializer, UserLoginSerializer
 from main.models import Email
 
 
-class UserList(GenericAPIView):
-    authentication_classes = [BasicAuthentication]
+class UsersFeed(GenericAPIView):
+    authentication_classes = [TokenAuthentication]
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    #permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
 
@@ -61,7 +61,13 @@ class UserLogin(APIView):
         serializer = UserLoginSerializer(data=request.data)
         if serializer.is_valid():
             data = serializer.validated_data
-            return Response({"token": data["token"]}, status=HTTP_200_OK)
+            responseJson = {
+                "id": data["id"],
+                "username": data["username"],
+                "email": data["email"],
+                "token": data["token"]
+            }
+            return Response(responseJson, status=HTTP_200_OK)
         return Response(status=HTTP_400_BAD_REQUEST)
 
 
@@ -72,8 +78,32 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
 
 
+class EmailListView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk):
+        try:
+            user = User.objects.get(pk=pk)
+            emails = Email.objects.filter(
+                Q(from_user=user) |
+                Q(to_user=user)
+            ).order_by("-timestamp").distinct()
+            return emails
+        except:
+            return None
+
+    def get(self, request, pk):
+        emails = self.get_object(pk)
+        serializer = EmailSerializer(emails, many=True)
+        return Response(serializer.data)
+
+
+
+
+
 class EmailViewSet(viewsets.ModelViewSet):
-    authentication_classes = [BasicAuthentication]
+    # authentication_classes = [BasicAuthentication]
     #permission_classes = [IsAuthenticated]
     serializer_class = EmailSerializer
     queryset = Email.objects.all()

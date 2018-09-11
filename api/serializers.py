@@ -4,7 +4,6 @@ from rest_framework import serializers
 from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import ValidationError
 from rest_framework.fields import CharField
-from rest_framework.relations import RelatedField
 
 from main.models import Email
 
@@ -64,12 +63,21 @@ class UserLoginSerializer(serializers.ModelSerializer):
                 raise ValidationError("Incorrect credentials")
         token, created = Token.objects.get_or_create(user=user_obj)
         data["token"] = token.key
+        data["id"] = user_obj.id
+        data["email"] = user_obj.email
         return data
 
 
+class TimestampField(serializers.Field):
+    def to_representation(self, obj):
+        obj = obj.strftime("%d %B %Y %H:%M")
+        return obj
+
+
 class EmailSerializer(serializers.ModelSerializer):
-    from_user = UserSerializer(read_only=True)
-    to_user = UserSerializer(read_only=True)
+    from_user = UserSerializer()
+    to_user = UserSerializer()
+    timestamp = TimestampField()
 
     class Meta:
         model = Email
