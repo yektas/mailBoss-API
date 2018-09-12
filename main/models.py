@@ -3,10 +3,11 @@ from django.db import models
 
 
 class Email(models.Model):
-    from_user = models.ForeignKey(User, related_name="from_user")
-    to_user = models.ForeignKey(User, related_name="to_user")
+    from_user = models.ForeignKey(User, related_name="sent_mail")
+    to_user = models.ForeignKey(User, related_name="received_mail")
     subject = models.CharField(max_length=150)
     content = models.TextField()
+    reply_mail = models.ForeignKey('self', default=None, null=True, blank=True)
     read = models.BooleanField(default=False)
     timestamp = models.DateTimeField(auto_now_add=True)
 

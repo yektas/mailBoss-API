@@ -1,14 +1,14 @@
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import User
-from rest_framework import serializers
 from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import ValidationError
-from rest_framework.fields import CharField
+from rest_framework.fields import CharField, Field
+from rest_framework.serializers import ModelSerializer
 
 from main.models import Email
 
 
-class UserSerializer(serializers.ModelSerializer):
+class UserSerializer(ModelSerializer):
     class Meta:
         model = User
         fields = [
@@ -33,7 +33,7 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
 
-class UserLoginSerializer(serializers.ModelSerializer):
+class UserLoginSerializer(ModelSerializer):
     username = CharField()
     password = CharField()
 
@@ -68,13 +68,13 @@ class UserLoginSerializer(serializers.ModelSerializer):
         return data
 
 
-class TimestampField(serializers.Field):
+class TimestampField(Field):
     def to_representation(self, obj):
         obj = obj.strftime("%d %B %Y %H:%M")
         return obj
 
 
-class EmailSerializer(serializers.ModelSerializer):
+class EmailSerializer(ModelSerializer):
     from_user = UserSerializer()
     to_user = UserSerializer()
     timestamp = TimestampField()
@@ -87,7 +87,18 @@ class EmailSerializer(serializers.ModelSerializer):
             "to_user",
             "subject",
             "timestamp",
+            "reply_mail",
             "read",
             "content"
         ]
 
+
+class EmailCreateSerializer(ModelSerializer):
+    from_user = UserSerializer(read_only=True)
+    to_user = UserSerializer(read_only=True)
+    subject = CharField()
+    content = CharField()
+
+    class Meta:
+        model = Email
+        fields = "__all__"
