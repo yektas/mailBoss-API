@@ -1,11 +1,10 @@
 from django.contrib.auth.models import User
 from django.db.models import Q
-from rest_framework import viewsets
-from rest_framework.authentication import BasicAuthentication
+from rest_framework.authentication import BasicAuthentication, TokenAuthentication
 from rest_framework.generics import GenericAPIView, CreateAPIView
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST
+from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_404_NOT_FOUND
 from rest_framework.views import APIView
 
 from api.authentication import CsrfExemptSessionAuthentication
@@ -14,11 +13,11 @@ from main.models import Email
 
 
 class UsersFeed(GenericAPIView):
-    # authentication_classes = [TokenAuthentication]
+    authentication_classes = [TokenAuthentication]
     queryset = User.objects.all()
     serializer_class = UserSerializer
 
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
 
@@ -72,16 +71,26 @@ class UserLogin(APIView):
         return Response(status=HTTP_400_BAD_REQUEST)
 
 
-class UserViewSet(viewsets.ModelViewSet):
-    authentication_classes = [BasicAuthentication]
-    # permission_classes = [IsAuthenticated]
-    serializer_class = UserSerializer
-    queryset = User.objects.all()
+class CheckUserView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user_email = request.data["email"]
+        try:
+            user_obj = User.objects.get(email=user_email)
+            if user_obj is not None:
+                return Response(status=HTTP_200_OK)
+            else:
+                return Response(status=HTTP_404_NOT_FOUND)
+        except:
+            return Response(status=HTTP_400_BAD_REQUEST)
+
 
 
 class EmailListView(APIView):
-    # authentication_classes = [TokenAuthentication]
-    #permission_classes = [IsAuthenticated]
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def get_object(self, pk):
         try:
@@ -99,38 +108,23 @@ class EmailListView(APIView):
         serializer = EmailSerializer(emails, many=True)
         return Response(serializer.data)
 
-    def delete(self, request, pk):
-        try:
-            email = Email.objects.get(pk)
-            email.delete()
-            return Response(status=HTTP_200_OK)
-        except:
-            return Response(status=HTTP_400_BAD_REQUEST)
-
 
 class EmailCreateView(APIView):
-    #authentication_classes = [TokenAuthentication]
-    #permission_classes = [IsAuthenticated]
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
     def post(self, request):
-        data = request.data
+        data = request.data["mail"]
         from_user_id = data["from_user"]
-        to_user_id = data["to_user"]
+        to_email = data["to_email"]
         subject = data["subject"]
         content = data["content"]
         try:
             from_user = User.objects.get(id=from_user_id)
-            to_user = User.objects.get(id=to_user_id)
-            edited_data = {
-                "from_user": from_user,
-                "to_user": to_user,
-                "subject": subject,
-                "content": content
-            }
-
+            to_user = User.objects.get(email=to_email)
             created = Email.objects.create(from_user=from_user, to_user=to_user, subject=subject, content=content)
             if created is not None:
                 serializer = EmailSerializer(created)
-                return Response(serializer.data, status=HTTP_200_OK)
+                return Response(status=HTTP_200_OK)
             else:
                 return Response(status=HTTP_400_BAD_REQUEST)
         except:
@@ -138,6 +132,8 @@ class EmailCreateView(APIView):
 
 
 class EmailReplyView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def get_object(self, pk):
         try:
@@ -149,8 +145,8 @@ class EmailReplyView(APIView):
     def post(self, request, pk):
         email = self.get_object(pk=pk)
         replier = User.objects.get(id=email.to_user.id)
-        content = request.data["content"]
-        subject = "RE: {}".format(email.subject)
+        content = request.data["data"]["content"]
+        subject = request.data["data"]["subject"]
         reply_email = Email.objects.create(
             from_user=replier,
             to_user=email.from_user,
@@ -166,8 +162,9 @@ class EmailReplyView(APIView):
 
 
 class EmailBetweenListView(APIView):
-    # authentication_classes = [TokenAuthentication]
-    # permission_classes = [IsAuthenticated]
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
     def get(self, request, from_user, to_user):
         from_user_id = int(from_user)
         to_user_id = int(to_user)
@@ -183,6 +180,8 @@ class EmailBetweenListView(APIView):
 
 
 class EmailMarkAsReadView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         email_id = int(request.data["id"])
