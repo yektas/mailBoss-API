@@ -7,7 +7,7 @@ urlpatterns = [
     url(r'^user/emails/mark-as-read/', views.EmailMarkAsReadView.as_view()),
     url(r'^user/emails/replies/(?P<pk>\d+)', views.EmailPreviousRepliesView.as_view()),
     url(r'^user/emails/reply/', views.EmailReplyView.as_view()),
-    url(r'^user/emails/(?P<from_user>\d+)/(?P<to_user>\d+)', views.EmailBetweenListView.as_view()),
+    url(r'^user/emails/(?P<sender_id>\d+)/(?P<receiver_id>\d+)', views.EmailBetweenListView.as_view()),
     url(r'^user/emails/(?P<pk>\d+)', views.EmailListView.as_view()),
     url(r'^email/send/', views.EmailCreateView.as_view()),
     url(r'^user/check-user/', views.CheckUserView.as_view()),

@@ -2,13 +2,23 @@ from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import ValidationError
-from rest_framework.fields import CharField, ReadOnlyField
+from rest_framework.fields import CharField
 from rest_framework.serializers import ModelSerializer
 
-from main.models import Message, Message_Recipient
+from main.models import Message, Message_Recipient, Status
 
 
 class UserSerializer(ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "email"
+        ]
+
+
+class UserCreateSerializer(ModelSerializer):
     class Meta:
         model = User
         fields = [
@@ -68,9 +78,21 @@ class UserLoginSerializer(ModelSerializer):
         return data
 
 
+class StatusSerializer(ModelSerializer):
+    user = UserSerializer()
+
+    class Meta:
+        model = Status
+        fields = [
+            "id",
+            "user",
+            "message",
+            "isRead",
+            "isDeleted"
+        ]
+
 class MessageSerializer(ModelSerializer):
     sender = UserSerializer()
-    receiver = UserSerializer(ReadOnlyField())
     class Meta:
         model = Message
         fields = [
@@ -79,23 +101,18 @@ class MessageSerializer(ModelSerializer):
             "subject",
             "body",
             "timestamp",
-            "isRead",
-            "isDeleted",
             "parent",
-            "receiver"
         ]
 
 
 class MailSerializer(ModelSerializer):
     message = MessageSerializer()
     receiver = UserSerializer()
-
     class Meta:
         model = Message_Recipient
         fields = [
             "id",
             "receiver",
             "message",
-            "isRead",
-            "isDeleted"
         ]
+

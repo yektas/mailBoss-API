@@ -6,8 +6,6 @@ class Message(models.Model):
     sender = models.ForeignKey(User)
     subject = models.CharField(max_length=150)
     body = models.TextField()
-    isRead = models.BooleanField(default=True)
-    isDeleted = models.BooleanField(default=False)
     timestamp = models.DateTimeField(auto_now_add=True)
     parent = models.ForeignKey('self', blank=True, null=True)
 
@@ -17,15 +15,18 @@ class Message(models.Model):
 
     @property
     def receiver(self):
-        return Message_Recipient.objects.get(message__id=self.id).receiver
-
+        return Message_Recipient.objects.get(message=self).receiver
 
 class Message_Recipient(models.Model):
     receiver = models.ForeignKey(User)
     message = models.ForeignKey("Message")
-    isRead = models.BooleanField(default=False)
-    isDeleted = models.BooleanField(default=False)
 
     def __str__(self):
-        return "Message receiver {}, status: isRead:{} isDeleted:{} message:{}".format(self.receiver, self.isRead,
-                                                                                       self.isDeleted, self.message)
+        return "Message receiver {}, status: message:{}".format(self.receiver, self.message)
+
+
+class Status(models.Model):
+    user = models.ForeignKey(User)
+    message = models.ForeignKey("Message", related_name="status_message")
+    isRead = models.BooleanField(default=False)
+    isDeleted = models.BooleanField(default=False)

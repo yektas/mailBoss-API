@@ -7,20 +7,45 @@ from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_404_NO
 from rest_framework.views import APIView
 
 from api.authentication import CsrfExemptSessionAuthentication
-from api.serializers import UserSerializer, UserLoginSerializer, MailSerializer, MessageSerializer
-from main.models import Message, Message_Recipient
+from api.serializers import UserSerializer, UserLoginSerializer, MailSerializer, MessageSerializer, StatusSerializer, \
+    UserCreateSerializer
+from main.models import Message, Message_Recipient, Status
 
 
 class UsersFeed(GenericAPIView):
     authentication_classes = [TokenAuthentication]
     queryset = User.objects.all()
     serializer_class = UserSerializer
-
     permission_classes = [IsAuthenticated]
 
+    def get(self, request, pk):
+
+        users = self.get_queryset().exclude(pk=pk)
+
+        responseData = []
+        for user in users:
+            userData = UserSerializer(user).data
+            try:
+                lastSentMail = Message.objects.filter(sender=user).order_by("-timestamp").first()
+                lastReceivedMail = Message_Recipient.objects.filter(receiver=user).order_by(
+                    "-message__timestamp").first()
+                if lastReceivedMail.message.timestamp > lastSentMail.timestamp:
+                    lastMail = lastReceivedMail
+                else:
+                    lastMail = Message_Recipient.objects.get(message=lastSentMail)
+
+                mailData = {
+                    "last_email": MailSerializer(lastMail).data,
+                }
+            except:
+                data = {**userData, "last_email": "", "receiver": ""}
+                responseData.append(data)
+                continue
+            responseData.append({**userData, **mailData})
+        return Response(responseData)
 class UserCreate(CreateAPIView):
     queryset = User.objects.all()
-    serializer_class = UserSerializer
+    serializer_class = UserCreateSerializer
     permission_classes = [AllowAny]
 
 class UserLogin(APIView):
@@ -40,11 +65,11 @@ class UserLogin(APIView):
         return Response(status=HTTP_400_BAD_REQUEST)
 
 class CheckUserView(APIView):
-    # authentication_classes = [TokenAuthentication]
-    # permission_classes = [IsAuthenticated]
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        user_email = request.data["email"]
+        user_email = request.data["email"].strip()
         try:
             user_obj = User.objects.get(email=user_email)
             if user_obj is not None:
@@ -55,34 +80,46 @@ class CheckUserView(APIView):
             return Response(status=HTTP_400_BAD_REQUEST)
 
 class EmailListView(APIView):
-    # authentication_classes = [TokenAuthentication]
-    # permission_classes = [IsAuthenticated]
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
         user = User.objects.get(pk=pk)
-        received_messages = Message_Recipient.objects.filter(receiver=user). \
-            select_related("message"). \
-            filter(message__parent=None)
+
         sent_messages = Message.objects.filter(sender=user, parent=None)
+        received_messages = Message_Recipient.objects.filter(receiver=user).select_related("message").filter(
+            message__parent=None)
 
         sent_mails = Message_Recipient.objects.filter(message__in=sent_messages)
-        allMails = (sent_mails | received_messages).order_by("-message__timestamp")
-        serializer = MailSerializer(allMails, many=True)
-        return Response(serializer.data, status=HTTP_200_OK)
-        # received_messages = Message_Recipient.objects.filter(receiver=user).select_related("message").filter(message__parent=None)
-        # sent_messages = Message.objects.filter(sender=user, parent=None)
-        #
-        # receivedSerializer = MailSerializer(received_messages, many=True)
-        # sentSerializer = MessageSerializer(sent_messages, many=True)
-        #
-        # response = {
-        #     "sent_messages": sentSerializer.data,
-        #     "received_messages": receivedSerializer.data
-        # }
-        # return Response(response, status=HTTP_200_OK)
 
+        allMails = (sent_mails | received_messages).order_by("-message__timestamp")
+
+        data = []
+
+        for mail in allMails:
+            mail_status = Status.objects.get(user=user, message=mail.message)
+            try:
+                if not mail_status.isDeleted:
+                    lastReply = mail.message.lastReply
+                    data.append({
+                        "parentMail": MailSerializer(mail).data,
+                        "lastReply": MailSerializer(lastReply).data,
+                        "status": StatusSerializer(mail_status).data
+                    })
+            except:
+                data.append({
+                    "parentMail": MailSerializer(mail).data,
+                    "lastReply": MailSerializer(mail).data,
+                    "status": StatusSerializer(mail_status).data
+                })
+
+        data.sort(key=lambda d: d['lastReply']['message']['timestamp'], reverse=True)
+
+        return Response(data, status=HTTP_200_OK)
 
 class EmailPreviousRepliesView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
         try:
@@ -98,8 +135,8 @@ class EmailPreviousRepliesView(APIView):
             return Response(status=HTTP_400_BAD_REQUEST)
 
 class EmailCreateView(APIView):
-    # authentication_classes = [TokenAuthentication]
-    #permission_classes = [IsAuthenticated]
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         data = request.data["mail"]
@@ -111,14 +148,21 @@ class EmailCreateView(APIView):
         sender = User.objects.get(id=sender_id)
         receiver = User.objects.get(email=receiver_email)
 
+
         newMessage = Message.objects.create(sender=sender, subject=subject, body=body, parent=None)
+
+        if sender.id == receiver.id:
+            Status.objects.create(user=sender, isRead=False, message=newMessage)
+        else:
+            Status.objects.create(user=sender, isRead=True, message=newMessage)
+            Status.objects.create(user=receiver, message=newMessage)
         Message_Recipient.objects.create(receiver=receiver, message=newMessage)
 
         return Response(status=HTTP_200_OK)
 
 class EmailReplyView(APIView):
-    # authentication_classes = [TokenAuthentication]
-    # permission_classes = [IsAuthenticated]
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         data = request.data["data"]
@@ -133,7 +177,14 @@ class EmailReplyView(APIView):
         receiver = User.objects.get(id=receiver_id)
 
         current_mail = Message.objects.get(pk=parent_id)
-
+        current_status = Status.objects.filter(message=current_mail)
+        for status in current_status:
+            if status.user.id == sender.id:
+                status.isRead = True
+            if status.user.id == receiver.id:
+                status.isDeleted = False
+                status.isRead = False
+            status.save()
         # Parent mail yoksa ( İlk atılan maile verilen cevap )
         if current_mail.parent is None:
             newMessage = Message.objects.create(sender=sender, subject=subject, body=body, parent=current_mail)
@@ -150,11 +201,58 @@ class EmailBetweenListView(APIView):
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
+    def get(self, request, sender_id, receiver_id):
+
+        sender = User.objects.get(pk=sender_id)
+        receiver = User.objects.get(pk=receiver_id)
+
+        parent1 = Message.objects.filter(sender=sender, parent=None)
+        mails = []
+        for parent in parent1:
+            if parent.receiver == receiver:
+                mails.append(MessageSerializer(parent).data)
+
+        parent2 = Message.objects.filter(sender=receiver, parent=None)
+        for parent in parent2:
+            if parent.receiver == sender:
+                mails.append(MessageSerializer(parent).data)
+
+        mails.sort(key=lambda d: d['timestamp'], reverse=True)
+
+        return Response(mails, status=HTTP_200_OK)
 class EmailMarkAsReadView(APIView):
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        data = request.data["mail"]
+        current_user_id = request.data["current_user"]
+        try:
+            user = User.objects.get(pk=current_user_id)
+
+            parentMail = Message.objects.get(pk=data["parentMail"]["message"]["id"])
+            status = Status.objects.get(user=user, message=parentMail)
+            status.isRead = True
+            status.save()
+            return Response(status=HTTP_200_OK)
+        except:
+            return Response(status=HTTP_400_BAD_REQUEST)
 
 
 class EmailMarkAsDeletedView(APIView):
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        mail = request.data["mail"]
+        current_user_id = request.data["current_user"]
+        try:
+            user = User.objects.get(pk=current_user_id)
+            parentMail = Message.objects.get(pk=mail["parentMail"]["message"]["id"])
+            status = Status.objects.get(user=user, message=parentMail)
+            status.isDeleted = True
+            status.isRead = True
+            status.save()
+            return Response(status=HTTP_200_OK)
+        except:
+            return Response(status=HTTP_400_BAD_REQUEST)
