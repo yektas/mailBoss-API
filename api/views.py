@@ -81,7 +81,8 @@ class CheckUserView(APIView):
 
 class EmailListView(APIView):
     authentication_classes = [TokenAuthentication]
-    permission_classes = [IsAuthenticated]
+
+    # permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
         user = User.objects.get(pk=pk)
@@ -98,20 +99,20 @@ class EmailListView(APIView):
 
         for mail in allMails:
             mail_status = Status.objects.get(user=user, message=mail.message)
-            try:
-                if not mail_status.isDeleted:
-                    lastReply = mail.message.lastReply
+            lastReply = mail.message.lastReply
+            if not mail_status.isDeleted:
+                if lastReply is not None:
                     data.append({
                         "parentMail": MailSerializer(mail).data,
                         "lastReply": MailSerializer(lastReply).data,
                         "status": StatusSerializer(mail_status).data
                     })
-            except:
-                data.append({
-                    "parentMail": MailSerializer(mail).data,
-                    "lastReply": MailSerializer(mail).data,
-                    "status": StatusSerializer(mail_status).data
-                })
+                else:
+                    data.append({
+                        "parentMail": MailSerializer(mail).data,
+                        "lastReply": MailSerializer(mail).data,
+                        "status": StatusSerializer(mail_status).data
+                    })
 
         data.sort(key=lambda d: d['lastReply']['message']['timestamp'], reverse=True)
 
@@ -207,15 +208,25 @@ class EmailBetweenListView(APIView):
         receiver = User.objects.get(pk=receiver_id)
 
         parent1 = Message.objects.filter(sender=sender, parent=None)
+
         mails = []
         for parent in parent1:
-            if parent.receiver == receiver:
-                mails.append(MessageSerializer(parent).data)
-
+            try:
+                status = Status.objects.get(user=sender, message=parent.id)
+                if not status.isDeleted:
+                    if parent.receiver == receiver:
+                        mails.append(MessageSerializer(parent).data)
+            except:
+                continue
         parent2 = Message.objects.filter(sender=receiver, parent=None)
         for parent in parent2:
-            if parent.receiver == sender:
-                mails.append(MessageSerializer(parent).data)
+            try:
+                status = Status.objects.get(user=sender, message=parent.id)
+                if not status.isDeleted:
+                    if parent.receiver == sender:
+                        mails.append(MessageSerializer(parent).data)
+            except:
+                continue
 
         mails.sort(key=lambda d: d['timestamp'], reverse=True)
 

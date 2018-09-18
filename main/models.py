@@ -14,6 +14,12 @@ class Message(models.Model):
         return "From: {} , Subject {}, ParentStatus: {}".format(self.sender, self.subject, parent_status)
 
     @property
+    def lastReply(self):
+        return Message_Recipient.objects.filter(message__parent_id=self.id).order_by("-message__timestamp").first()
+
+
+
+    @property
     def receiver(self):
         return Message_Recipient.objects.get(message=self).receiver
 
