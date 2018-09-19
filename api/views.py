@@ -24,25 +24,32 @@ class UsersFeed(GenericAPIView):
 
         responseData = []
         for user in users:
+            lastMail = None
             userData = UserSerializer(user).data
-            try:
-                lastSentMail = Message.objects.filter(sender=user).order_by("-timestamp").first()
-                lastReceivedMail = Message_Recipient.objects.filter(receiver=user).order_by(
-                    "-message__timestamp").first()
-                if lastReceivedMail.message.timestamp > lastSentMail.timestamp:
-                    lastMail = lastReceivedMail
-                else:
-                    lastMail = Message_Recipient.objects.get(message=lastSentMail)
+            lastSentMail = Message.objects.filter(sender=user).order_by("-timestamp").first()
 
-                mailData = {
-                    "last_email": MailSerializer(lastMail).data,
-                }
-            except:
-                data = {**userData, "last_email": "", "receiver": ""}
-                responseData.append(data)
-                continue
+            lastReceivedMail = Message_Recipient.objects.filter(receiver=user).order_by(
+                "-message__timestamp").first()
+
+            compare = False
+            if lastSentMail:
+                lastMail = Message_Recipient.objects.get(message=lastSentMail)
+                compare = True
+            if lastReceivedMail:
+                if compare:
+                    if lastMail.message.timestamp < lastReceivedMail.message.timestamp:
+                        lastMail = lastReceivedMail
+
+            if lastMail is None:
+                mailData = {"last_email": "", "receiver": ""}
+            else:
+                try:
+                    if not Status.objects.get(user=user, message=lastMail.message).isDeleted:
+                        mailData = {"last_email": MailSerializer(lastMail).data}
+                except:
+                    mailData = {"last_email": "", "receiver": ""}
             responseData.append({**userData, **mailData})
-        return Response(responseData)
+        return Response(responseData, status=HTTP_200_OK)
 class UserCreate(CreateAPIView):
     queryset = User.objects.all()
     serializer_class = UserCreateSerializer

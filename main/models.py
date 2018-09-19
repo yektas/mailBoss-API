@@ -17,8 +17,6 @@ class Message(models.Model):
     def lastReply(self):
         return Message_Recipient.objects.filter(message__parent_id=self.id).order_by("-message__timestamp").first()
 
-
-
     @property
     def receiver(self):
         return Message_Recipient.objects.get(message=self).receiver
